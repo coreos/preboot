@@ -15,12 +15,12 @@
 package types
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
 	"github.com/coreos/ignition/v2/config/shared/errors"
 	"github.com/coreos/ignition/v2/config/util"
-
 	"github.com/coreos/vcontext/path"
 	"github.com/coreos/vcontext/report"
 )
@@ -194,10 +194,9 @@ func TestConfigValidation(t *testing.T) {
 					},
 				},
 			},
-			out: errors.ErrPathConflictsParentDir,
+			out: fmt.Errorf("invalid entry at path /foo/bar/baz: %w", errors.ErrMissLabeledDir),
 			at:  path.New("json", "storage", "files", 1, "path"),
 		},
-
 		// test 7: file path conflicts with link path, should error
 		{
 			in: Config{
@@ -210,8 +209,8 @@ func TestConfigValidation(t *testing.T) {
 					},
 				},
 			},
-			out: errors.ErrPathConflictsParentDir,
-			at:  path.New("json", "storage", "links", 0, "path"),
+			out: fmt.Errorf("invalid entry at path /foo/bar/baz: %w", errors.ErrMissLabeledDir),
+			at:  path.New("json", "storage", "links", 1, "path"),
 		},
 
 		// test 8: file path conflicts with directory path, should error
@@ -220,15 +219,14 @@ func TestConfigValidation(t *testing.T) {
 				Storage: Storage{
 					Files: []File{
 						{Node: Node{Path: "/foo/bar"}},
-						{Node: Node{Path: "/foo/bar"}},
 					},
 					Directories: []Directory{
 						{Node: Node{Path: "/foo/bar/baz"}},
 					},
 				},
 			},
-			out: errors.ErrPathConflictsParentDir,
-			at:  path.New("json", "storage", "directories", 0, "path"),
+			out: fmt.Errorf("invalid entry at path /foo/bar/baz: %w", errors.ErrMissLabeledDir),
+			at:  path.New("json", "storage", "directories", 1, "path"),
 		},
 
 		// test 9: non-conflicting scenarios with systemd unit and systemd dropin file, should not error
@@ -302,7 +300,6 @@ func TestConfigValidation(t *testing.T) {
 			in: Config{
 				Storage: Storage{
 					Files: []File{
-						{Node: Node{Path: "/foo/bar"}},
 						{Node: Node{Path: "/foo/bar/baz"}},
 					},
 					Directories: []Directory{

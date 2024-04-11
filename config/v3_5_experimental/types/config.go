@@ -15,6 +15,7 @@
 package types
 
 import (
+	"fmt"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -34,6 +35,8 @@ var (
 		PreRelease: "experimental",
 	}
 )
+
+var paths = map[string]struct{}{}
 
 func (cfg Config) Validate(c path.ContextPath) (r report.Report) {
 	systemdPath := "/etc/systemd/system/"
@@ -76,43 +79,24 @@ func (cfg Config) validateParents(c path.ContextPath) report.Report {
 		Path  string
 		Field string
 	}
-	paths := map[string]struct{}{}
 	r := report.Report{}
 
 	for i, f := range cfg.Storage.Files {
-		if _, exists := paths[f.Path]; exists {
-			r.AddOnError(c.Append("storage", "files", i, "path"), errors.ErrPathConflictsParentDir) //TODO:  should add different error?
-			return r
-		}
-		paths[f.Path] = struct{}{}
-		entries = append(entries, struct {
-			Path  string
-			Field string
-		}{Path: f.Path, Field: "files"})
+		fmt.Println("File variable value:", f) // Added print statement
+		r = handlePathConflict(f.Path, "files", i, c, r, errors.ErrPathAlreadyExists)
+		addPathAndEntry(f.Path, "files", &entries)
 	}
 
 	for i, d := range cfg.Storage.Directories {
-		if _, exists := paths[d.Path]; exists {
-			r.AddOnError(c.Append("storage", "directories", i, "path"), errors.ErrPathConflictsParentDir) //TODO: should add different error?
-			return r
-		}
-		paths[d.Path] = struct{}{}
-		entries = append(entries, struct {
-			Path  string
-			Field string
-		}{Path: d.Path, Field: "directories"})
+		fmt.Println("Directory variable value:", d) // Added print statement
+		r = handlePathConflict(d.Path, "directories", i, c, r, errors.ErrPathAlreadyExists)
+		addPathAndEntry(d.Path, "directories", &entries)
 	}
 
 	for i, l := range cfg.Storage.Links {
-		if _, exists := paths[l.Path]; exists {
-			r.AddOnError(c.Append("storage", "links", i, "path"), errors.ErrPathConflictsParentDir) //TODO:  error to already exist path
-			return r
-		}
-		paths[l.Path] = struct{}{}
-		entries = append(entries, struct {
-			Path  string
-			Field string
-		}{Path: l.Path, Field: "links"})
+		fmt.Println("Link variable value:", l) // Added print statement
+		r = handlePathConflict(l.Path, "links", i, c, r, errors.ErrPathAlreadyExists)
+		addPathAndEntry(l.Path, "links", &entries)
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
@@ -120,9 +104,12 @@ func (cfg Config) validateParents(c path.ContextPath) report.Report {
 	})
 
 	for i, entry := range entries {
+		fmt.Println("Entry variable value:", entry) // Added print statement
 		if i > 0 && isWithin(entry.Path, entries[i-1].Path) {
 			if entries[i-1].Field != "directories" {
-				r.AddOnError(c.Append("storage", entry.Field, i, "path"), errors.ErrPathConflictsParentDir) //TODO: conflict parent directories error
+				errorMsg := fmt.Errorf("invalid entry at path %s: %v", entry.Path, errors.ErrMissLabeledDir)
+				r.AddOnError(c.Append("storage", entry.Field, i, "path"), errorMsg)
+				fmt.Println("Error message:", errorMsg) // Added print statement
 				return r
 			}
 		}
@@ -131,16 +118,42 @@ func (cfg Config) validateParents(c path.ContextPath) report.Report {
 	return r
 }
 
-// check the depth
+func handlePathConflict(path, fieldName string, index int, c path.ContextPath, r report.Report, err error) report.Report {
+	fmt.Println("Path variable value:", path) // Added print statement
+	if _, exists := paths[path]; exists {
+		r.AddOnError(c.Append("storage", fieldName, index, "path"), err)
+		fmt.Println("Error:", err) // Added print statement
+	}
+	return r
+}
+
+func addPathAndEntry(path, fieldName string, entries *[]struct{ Path, Field string }) {
+	*entries = append(*entries, struct {
+		Path  string
+		Field string
+	}{Path: path, Field: fieldName})
+	fmt.Println("Added entry:", path) // Added print statement
+}
+
 func depth(path string) uint {
 	var count uint
-	for p := filepath.Clean(path); p != "/" && p != "."; count++ {
-		p = filepath.Dir(p)
+	cleanedPath := filepath.FromSlash(filepath.Clean(path))
+	sep := string(filepath.Separator)
+
+	volume := filepath.VolumeName(cleanedPath)
+	if volume != "" {
+		cleanedPath = cleanedPath[len(volume):]
+	}
+
+	for cleanedPath != sep && cleanedPath != "." {
+		cleanedPath = filepath.Dir(cleanedPath)
+		count++
 	}
 	return count
 }
 
-// isWithin checks if newPath is within prevPath.
 func isWithin(newPath, prevPath string) bool {
+	fmt.Println("New path variable value:", newPath)       // Added print statement
+	fmt.Println("Previous path variable value:", prevPath) // Added print statement
 	return strings.HasPrefix(newPath, prevPath) && newPath != prevPath
 }

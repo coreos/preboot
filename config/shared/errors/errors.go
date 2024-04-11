@@ -85,7 +85,8 @@ var (
 	ErrInvalidProxy              = errors.New("proxies must be http(s)")
 	ErrInsecureProxy             = errors.New("insecure plaintext HTTP proxy specified for HTTPS resources")
 	ErrPathConflictsSystemd      = errors.New("path conflicts with systemd unit or dropin")
-	ErrPathConflictsParentDir    = errors.New("path conflicts with parent directory of another file, link, or directory")
+	ErrPathAlreadyExists         = errors.New("path already exists")
+	ErrMissLabeledDir            = errors.New("parent directory path matches configured file, check path, and ensure parent directory is configured")
 
 	// Systemd section errors
 	ErrInvalidSystemdExt       = errors.New("invalid systemd unit extension")
