@@ -15,6 +15,10 @@
 package types
 
 import (
+	"path/filepath"
+	"sort"
+	"strings"
+
 	"github.com/coreos/ignition/v2/config/shared/errors"
 	"github.com/coreos/ignition/v2/config/util"
 
@@ -61,5 +65,82 @@ func (cfg Config) Validate(c path.ContextPath) (r report.Report) {
 			r.AddOnError(c.Append("storage", "links", i, "path"), errors.ErrPathConflictsSystemd)
 		}
 	}
-	return
+
+	r.Merge(cfg.validateParents(c))
+
+	return r
+}
+
+func (cfg Config) validateParents(c path.ContextPath) report.Report {
+	var entries []struct {
+		Path  string
+		Field string
+	}
+	paths := map[string]struct{}{}
+	r := report.Report{}
+
+	for i, f := range cfg.Storage.Files {
+		if _, exists := paths[f.Path]; exists {
+			r.AddOnError(c.Append("storage", "files", i, "path"), errors.ErrPathConflictsParentDir) //TODO:  should add different error?
+			return r
+		}
+		paths[f.Path] = struct{}{}
+		entries = append(entries, struct {
+			Path  string
+			Field string
+		}{Path: f.Path, Field: "files"})
+	}
+
+	for i, d := range cfg.Storage.Directories {
+		if _, exists := paths[d.Path]; exists {
+			r.AddOnError(c.Append("storage", "directories", i, "path"), errors.ErrPathConflictsParentDir) //TODO: should add different error?
+			return r
+		}
+		paths[d.Path] = struct{}{}
+		entries = append(entries, struct {
+			Path  string
+			Field string
+		}{Path: d.Path, Field: "directories"})
+	}
+
+	for i, l := range cfg.Storage.Links {
+		if _, exists := paths[l.Path]; exists {
+			r.AddOnError(c.Append("storage", "links", i, "path"), errors.ErrPathConflictsParentDir) //TODO:  error to already exist path
+			return r
+		}
+		paths[l.Path] = struct{}{}
+		entries = append(entries, struct {
+			Path  string
+			Field string
+		}{Path: l.Path, Field: "links"})
+	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		return depth(entries[i].Path) < depth(entries[j].Path)
+	})
+
+	for i, entry := range entries {
+		if i > 0 && isWithin(entry.Path, entries[i-1].Path) {
+			if entries[i-1].Field != "directories" {
+				r.AddOnError(c.Append("storage", entry.Field, i, "path"), errors.ErrPathConflictsParentDir) //TODO: conflict parent directories error
+				return r
+			}
+		}
+	}
+
+	return r
+}
+
+// check the depth
+func depth(path string) uint {
+	var count uint
+	for p := filepath.Clean(path); p != "/" && p != "."; count++ {
+		p = filepath.Dir(p)
+	}
+	return count
+}
+
+// isWithin checks if newPath is within prevPath.
+func isWithin(newPath, prevPath string) bool {
+	return strings.HasPrefix(newPath, prevPath) && newPath != prevPath
 }
