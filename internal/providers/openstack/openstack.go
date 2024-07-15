@@ -44,9 +44,14 @@ const (
 )
 
 var (
-	metadataServiceUrl = url.URL{
+	ipv4MetadataServiceUrl = url.URL{
 		Scheme: "http",
 		Host:   "169.254.169.254",
+		Path:   "openstack/latest/user_data",
+	}
+	ipv6MetadataServiceUrl = url.URL{
+		Scheme: "http",
+		Host:   "[fe80::a9fe:a9fe]",
 		Path:   "openstack/latest/user_data",
 	}
 )
@@ -167,13 +172,38 @@ func fetchConfigFromDevice(logger *log.Logger, ctx context.Context, path string)
 }
 
 func fetchConfigFromMetadataService(f *resource.Fetcher) ([]byte, error) {
-	res, err := f.FetchToBuffer(metadataServiceUrl, resource.FetchOptions{})
+	var resIPv4, resIPv6 []byte
+	var errIPv4, errIPv6 error
 
-	// the metadata server exists but doesn't contain any actual metadata,
-	// assume that there is no config specified
-	if err == resource.ErrNotFound {
-		return nil, nil
+	// Try IPv4 endpoint
+	resIPv4, errIPv4 = f.FetchToBuffer(ipv4MetadataServiceUrl, resource.FetchOptions{})
+	if errIPv4 != nil && errIPv4 != resource.ErrNotFound {
+		f.Logger.Err("Failed to fetch config from IPv4: %v", errIPv4)
 	}
 
-	return res, err
+	// Try IPv6 endpoint
+	resIPv6, errIPv6 = f.FetchToBuffer(ipv6MetadataServiceUrl, resource.FetchOptions{})
+	if errIPv6 != nil && errIPv6 != resource.ErrNotFound {
+		f.Logger.Err("Failed to fetch config from IPv6: %v", errIPv6)
+	}
+
+	// If both IPv4 and IPv6 have valid data, combine them
+	if resIPv4 != nil && resIPv6 != nil {
+		return append(resIPv4, resIPv6...), nil
+	} else if resIPv4 != nil {
+		return resIPv4, nil
+	} else if resIPv6 != nil {
+		return resIPv6, nil
+	}
+
+	// If both endpoints fail, return the appropriate error
+	if errIPv4 != nil {
+		return nil, errIPv4
+	}
+	if errIPv6 != nil {
+		return nil, errIPv6
+	}
+
+	// If both endpoints return ErrNotFound
+	return nil, nil
 }
