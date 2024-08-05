@@ -11,6 +11,7 @@ nav_order: 9
 ### Features
 
 - Support partitioning disk with mounted partitions
+- Support IPv6 for single-stack OpenStack
 
 ### Changes
 
