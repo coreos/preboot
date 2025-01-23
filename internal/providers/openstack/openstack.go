@@ -229,8 +229,8 @@ func fetchConfigFromMetadataService(f *resource.Fetcher) ([]byte, error) {
 			fmt.Printf("IPv6 metadata service lookup failed: %v\n", err)
 			return ipv4Res, fmt.Errorf("IPv6 lookup failed, returning IPv4 result")
 		}
-
-		metadataServiceUrlIPv6Str := fmt.Sprintf("http://[%s%s]/openstack/latest/user_data", metadataServiceUrlIPv6.Host, interfaceName)
+		escapedInterfaceName := fmt.Sprintf("%%25%s", interfaceName)
+		metadataServiceUrlIPv6Str := fmt.Sprintf("http://[%s%s]/openstack/latest/user_data", metadataServiceUrlIPv6.Host, escapedInterfaceName)
 		fmt.Printf("Fetching from IPv6 metadata service at %s...\n", metadataServiceUrlIPv6Str)
 		fmt.Printf("Fetching from IPv6 metadata service at %s...\n", metadataServiceUrlIPv6.String())
 		ipv6Res, ipv6Err = f.FetchToBuffer(metadataServiceUrlIPv6, resource.FetchOptions{})
