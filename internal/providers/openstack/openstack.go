@@ -253,7 +253,7 @@ func fetchConfigFromMetadataService(f *resource.Fetcher) ([]byte, error) {
 		return nil, fmt.Errorf("both IPv4 and IPv6 lookup failed")
 	}
 
-	metadataServiceUrlIPv6.Host = fmt.Sprintf("fe80::a9fe:a9fe%%%s", interfaceName)
+	metadataServiceUrlIPv6.Host = fmt.Sprintf("[%s]:80", fmt.Sprintf("fe80::a9fe:a9fe%%%s", interfaceName))
 	fmt.Printf("Fetching from IPv6 metadata service at %s...\n", metadataServiceUrlIPv6.String())
 	ipv6Res, ipv6Err = f.FetchToBuffer(metadataServiceUrlIPv6, resource.FetchOptions{})
 	if ipv6Err != nil {
