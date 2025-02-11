@@ -52,7 +52,7 @@ var (
 	}
 	metadataServiceUrlIPv6 = url.URL{
 		Scheme: "http",
-		Host:   "fe80::a9fe:a9fe%",
+		Host:   "[fe80::a9fe:a9fe%]",
 		Path:   "openstack/latest/user_data",
 	}
 )
@@ -175,7 +175,6 @@ func fetchConfigFromDevice(logger *log.Logger, ctx context.Context, path string)
 // Checks if an IP is an IPv6 address
 func isIPv6Address(ip net.IP) bool {
 	isIPv6 := ip.To4() == nil
-	fmt.Printf("Verificando se o IP é IPv6: %s, resultado: %v\n", ip.String(), isIPv6)
 	return isIPv6
 }
 
@@ -203,7 +202,6 @@ func findZoneID() (string, error) {
 
 		for _, addr := range addrs {
 			if ipnet, ok := addr.(*net.IPNet); ok && isIPv6Address(ipnet.IP) {
-				fmt.Printf("Active interface found: %s\n", iface.Name)
 				return iface.Name, nil
 			}
 		}
@@ -217,22 +215,19 @@ func fetchConfigFromMetadataService(f *resource.Fetcher) ([]byte, error) {
 	var ipv4Err, ipv6Err error
 
 	// Attempt to fetch from IPv4
-	fmt.Println("Fetching from IPv4 metadata service...")
 	ipv4Res, ipv4Err = f.FetchToBuffer(metadataServiceUrlIPv4, resource.FetchOptions{})
 	if ipv4Err == nil {
 		fmt.Println("Successfully fetched configuration from IPv4.")
 
 		// If IPv4 succeeds, attempt to fetch from IPv6 as well
-		fmt.Println("Fetching IPv6 address for metadata service...")
 		interfaceName, err := findZoneID()
 		if err != nil {
 			fmt.Printf("IPv6 metadata service lookup failed: %v\n", err)
 			return ipv4Res, fmt.Errorf("IPv6 lookup failed, returning IPv4 result")
 		}
-		escapedInterfaceName := fmt.Sprintf("%%25%s", interfaceName)
-		metadataServiceUrlIPv6Str := fmt.Sprintf("http://[%s%s]/openstack/latest/user_data", metadataServiceUrlIPv6.Host, escapedInterfaceName)
+		metadataServiceUrlIPv6.Host = fmt.Sprintf("[%s%s]", "fe80::a9fe:a9fe%", interfaceName)
+		metadataServiceUrlIPv6Str := fmt.Sprintf("http://[%s%s]/openstack/latest/user_data", metadataServiceUrlIPv6.Host, interfaceName)
 		fmt.Printf("Fetching from IPv6 metadata service at %s...\n", metadataServiceUrlIPv6Str)
-		fmt.Printf("Fetching from IPv6 metadata service at %s...\n", metadataServiceUrlIPv6.String())
 		ipv6Res, ipv6Err = f.FetchToBuffer(metadataServiceUrlIPv6, resource.FetchOptions{})
 
 		if ipv6Err != nil {
@@ -253,9 +248,11 @@ func fetchConfigFromMetadataService(f *resource.Fetcher) ([]byte, error) {
 		return nil, fmt.Errorf("both IPv4 and IPv6 lookup failed")
 	}
 
-	metadataServiceUrlIPv6.Host = fmt.Sprintf("[%s]:80", fmt.Sprintf("fe80::a9fe:a9fe%%%s", interfaceName))
-	fmt.Printf("Fetching from IPv6 metadata service at %s...\n", metadataServiceUrlIPv6.String())
+	metadataServiceUrlIPv6.Host = fmt.Sprintf("[%s%s]", "fe80::a9fe:a9fe%", interfaceName)
+	metadataServiceUrlIPv6Str := fmt.Sprintf("http://[%s%s]/openstack/latest/user_data", metadataServiceUrlIPv6.Host, interfaceName)
+	fmt.Printf("Fetching from IPv6 metadata service at %s...\n", metadataServiceUrlIPv6Str)
 	ipv6Res, ipv6Err = f.FetchToBuffer(metadataServiceUrlIPv6, resource.FetchOptions{})
+
 	if ipv6Err != nil {
 		fmt.Printf("IPv6 metadata service failed: %v\n", ipv6Err)
 		return nil, fmt.Errorf("both IPv4 and IPv6 services failed")
